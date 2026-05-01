@@ -1,3 +1,5 @@
+.PHONY: get clean run run-chrome run-android apk appbundle web web-serve
+
 get:
 	flutter pub get
 
