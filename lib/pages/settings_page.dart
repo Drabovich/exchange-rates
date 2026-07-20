@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show lerpDouble;
 
+import 'package:exchange_rates/myfin_cities.dart';
 import 'package:exchange_rates/primary_currencies.dart';
 import 'package:exchange_rates/ui/app_page_template.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   List<String> _order = List<String>.from(kPrimaryCurrencyCodes);
   Set<String> _enabled = Set<String>.from(kDefaultEnabledCurrencyCodes);
+  int _cityId = kDefaultMyfinCityId;
   bool _loading = true;
   int? _draggingIndex;
   Future<void> _persistChain = Future.value();
@@ -27,10 +29,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _load() async {
     final config = await loadCurrencyUiConfig();
+    final cityId = await loadSelectedCityId();
     if (!mounted) return;
     setState(() {
       _order = List<String>.from(config.fullOrder);
       _enabled = Set<String>.from(config.enabled);
+      _cityId = cityId;
       _loading = false;
     });
   }
@@ -40,7 +44,10 @@ class _SettingsPageState extends State<SettingsPage> {
       fullOrder: List<String>.from(_order),
       enabled: Set<String>.from(_enabled),
     );
-    _persistChain = _persistChain.then((_) => saveCurrencyUiConfig(snapshot));
+    _persistChain = _persistChain.then((_) async {
+      await saveCurrencyUiConfig(snapshot);
+      await saveSelectedCityId(_cityId);
+    });
     await _persistChain;
   }
 
@@ -53,6 +60,39 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     setState(() => _enabled = next);
     await _persist();
+  }
+
+  Future<void> _onCityChanged(int cityId) async {
+    if (cityId == _cityId) return;
+    setState(() => _cityId = cityId);
+    await _persist();
+  }
+
+  Future<void> _pickCity() async {
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: kMyfinCities.length,
+            itemBuilder: (context, index) {
+              final city = kMyfinCities[index];
+              final isActive = city.id == _cityId;
+              return ListTile(
+                title: Text(city.name),
+                trailing: isActive ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, city.id),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    await _onCityChanged(selected);
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -149,6 +189,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _order = List<String>.from(kPrimaryCurrencyCodes);
       _enabled = Set<String>.from(kDefaultEnabledCurrencyCodes);
+      _cityId = kDefaultMyfinCityId;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Настройки сброшены')),
@@ -166,6 +207,23 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  InputDecoration _fieldDecoration(String label) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFFE1E8F1)),
+    );
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0xFF64748B)),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -177,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
       child: AppPageTemplate(
         title: 'Настройки',
         subtitle:
-            'Отметь валюты для главной. Порядок меняется перетаскиванием за значок слева и сохраняется',
+            'Город для курсов и валюты на главной. Порядок меняется перетаскиванием',
         showBackButton: true,
         child: _loading
             ? const Center(
@@ -206,6 +264,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: _pickCity,
+                      child: InputDecorator(
+                        decoration: _fieldDecoration('Город'),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                myfinCityById(_cityId).name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                              ),
+                            ),
+                            const Icon(Icons.keyboard_arrow_down_rounded),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final listW = constraints.maxWidth;
@@ -294,14 +373,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: FilledButton(
+                      child: FilledButton.icon(
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF020617),
                           foregroundColor: Colors.white,
                           elevation: 0,
+                          minimumSize: const Size(0, 48),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
+                            horizontal: 24,
+                            vertical: 16,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -310,7 +390,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         onPressed: _loading
                             ? null
                             : () => unawaited(_onResetToFreshInstall()),
-                        child: const Text('Сбросить настройки'),
+                        icon: const Icon(Icons.restart_alt_rounded, size: 22),
+                        label: const Text('Сбросить настройки'),
                       ),
                     ),
                   ],
