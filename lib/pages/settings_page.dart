@@ -378,10 +378,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           backgroundColor: const Color(0xFF020617),
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          minimumSize: const Size(0, 48),
+                          minimumSize: const Size(0, 42),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
+                            horizontal: 22,
+                            vertical: 12,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -390,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         onPressed: _loading
                             ? null
                             : () => unawaited(_onResetToFreshInstall()),
-                        icon: const Icon(Icons.restart_alt_rounded, size: 22),
+                        icon: const Icon(Icons.restart_alt_rounded, size: 20),
                         label: const Text('Сбросить настройки'),
                       ),
                     ),
